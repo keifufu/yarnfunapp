@@ -108,7 +108,7 @@ fn is_ignored_key(code: u16) -> bool {
   || code == KeyCode::KEY_CAPSLOCK.0
   || code == KeyCode::KEY_NUMLOCK.0
   || code == KeyCode::KEY_SCROLLLOCK.0
-  || (KeyCode::KEY_F1.0..=KeyCode::KEY_F12.0).contains(&code)
+  // || (KeyCode::KEY_F1.0..=KeyCode::KEY_F12.0).contains(&code)
 }
 
 fn input_thread(tx: Sender<InputMessage>) -> io::Result<()> {
