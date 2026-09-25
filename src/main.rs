@@ -348,7 +348,7 @@ fn build_ui(app: &Application, rx: Receiver<InputMessage>, config: Config) {
 
       match key {
         key if config.osu && (key == KeyCode::KEY_Z || key == KeyCode::KEY_Y) => frame = 1,
-        key if config.osu && (key == KeyCode::KEY_X || key == KeyCode::KEY_Y) => frame = 2,
+        key if config.osu && key == KeyCode::KEY_X => frame = 2,
         _ => {
           let now = Instant::now();
 
