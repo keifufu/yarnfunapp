@@ -17,7 +17,7 @@ const RIGHT_IMAGE: &[u8] = include_bytes!("../images/right.png");
 
 #[derive(Debug)]
 enum InputMessage {
-  KeyPress,
+  KeyPress(KeyCode),
 }
 
 #[derive(Clone)]
@@ -30,6 +30,7 @@ struct Config {
   size: i32,
   flip: bool,
   bounce: bool,
+  osu: bool,
 }
 
 fn parse_env<T>(name: &str, default: T) -> T
@@ -67,6 +68,14 @@ impl Config {
           )
         })
         .unwrap_or(true),
+      osu: env::var("YARN_OSU")
+        .map(|value| {
+          matches!(
+            value.to_lowercase().as_str(),
+            "1" | "true" | "yes" | "on"
+          )
+        })
+        .unwrap_or(false),
     }
   }
 }
@@ -126,7 +135,7 @@ fn input_thread(tx: Sender<InputMessage>) -> io::Result<()> {
     }
 
     match Device::open(&path) {
-      Ok(mut device) => {
+      Ok(device) => {
         let Some(keys) = device.supported_keys() else {
           continue;
         };
@@ -178,7 +187,7 @@ fn input_thread(tx: Sender<InputMessage>) -> io::Result<()> {
               && is_key_down
               && !is_ignored_key(event.code())
             {
-              let _ = tx.send(InputMessage::KeyPress);
+              let _ = tx.send(InputMessage::KeyPress(KeyCode(event.code())));
             }
           }
         }
@@ -331,18 +340,25 @@ fn build_ui(app: &Application, rx: Receiver<InputMessage>, config: Config) {
   let mut bounce_phase = false;
 
   gtk4::glib::timeout_add_local(Duration::from_millis(16), move || {
-    let mut got_input = false;
+    let mut should_bounce = false;
 
-    while rx.try_recv().is_ok() {
-      got_input = true;
+    while let Ok(InputMessage::KeyPress(key)) = rx.try_recv() {
       last_input = Instant::now();
+      should_bounce = true;
 
-      let now = Instant::now();
+      match key {
+        key if config.osu && (key == KeyCode::KEY_Z || key == KeyCode::KEY_Y) => frame = 1,
+        key if config.osu && (key == KeyCode::KEY_X || key == KeyCode::KEY_Y) => frame = 2,
+        _ => {
+          let now = Instant::now();
 
-      if now.duration_since(last_switch) >= Duration::from_millis(config.switch_debounce_ms)
-      {
-        frame = if frame == 1 { 2 } else { 1 };
-        last_switch = now;
+          if now.duration_since(last_switch)
+            >= Duration::from_millis(config.switch_debounce_ms)
+          {
+            frame = if frame == 1 { 2 } else { 1 };
+            last_switch = now;
+          }
+        }
       }
     }
 
@@ -351,18 +367,18 @@ fn build_ui(app: &Application, rx: Receiver<InputMessage>, config: Config) {
     if desired_frame != last_displayed_frame {
       picture.set_paintable(Some(&textures[desired_frame as usize]));
       last_displayed_frame = desired_frame;
+    }
 
-      if config.bounce {
-        bounce_phase = !bounce_phase;
+    if should_bounce && config.bounce {
+      bounce_phase = !bounce_phase;
 
-        container.remove_css_class("bounce-a");
-        container.remove_css_class("bounce-b");
+      container.remove_css_class("bounce-a");
+      container.remove_css_class("bounce-b");
 
-        if bounce_phase {
-          container.add_css_class("bounce-a");
-        } else {
-          container.add_css_class("bounce-b");
-        }
+      if bounce_phase {
+        container.add_css_class("bounce-a");
+      } else {
+        container.add_css_class("bounce-b");
       }
     }
 
